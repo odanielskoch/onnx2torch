@@ -1,4 +1,3 @@
-# pylint: disable=missing-class-docstring
 __all__ = [
     'OnnxReduceSumDynamicAxes',
     'OnnxReduceSumStaticAxes',
@@ -12,7 +11,6 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
-from typing import cast
 
 import torch
 from torch import nn
@@ -31,17 +29,14 @@ from onnx2torch.utils.custom_export_to_onnx import OnnxToTorchModuleWithCustomEx
 
 
 @torch.fx.wrap
-def _get_element(x: Any, index: int = 0) -> Any:
+def _get_element(x: Union[List, Tuple], index: int = 0) -> Any:
     if isinstance(x, (tuple, list)):
         return x[index]
 
     return x
 
 
-def _initialize_none_dim(
-    dim: Optional[Union[int, Tuple[int, ...]]],
-    input_dim: int,
-) -> Union[List[int], Tuple[int, ...], int]:
+def _initialize_none_dim(dim: Optional[Union[int, Tuple[int, ...]]], input_dim: int):
     if dim is None:
         return list(range(input_dim))
 
@@ -52,27 +47,27 @@ def _log_sum(
     input_tensor: torch.Tensor,
     dim: Optional[Union[int, Tuple[int, ...]]] = None,
     keepdim: bool = False,
-) -> torch.Tensor:
-    dim_ = _initialize_none_dim(dim, input_tensor.dim())
-    return torch.log(torch.sum(input_tensor, dim=dim_, keepdim=keepdim))
+):
+    dim = _initialize_none_dim(dim, input_tensor.dim())
+    return torch.log(torch.sum(input_tensor, dim=dim, keepdim=keepdim))
 
 
 def _log_sum_exp(
     input_tensor: torch.Tensor,
     dim: Optional[Union[int, Tuple[int, ...]]] = None,
     keepdim: bool = False,
-) -> torch.Tensor:
-    dim_ = _initialize_none_dim(dim, input_tensor.dim())
-    return torch.logsumexp(input_tensor, dim=dim_, keepdim=keepdim)
+):
+    dim = _initialize_none_dim(dim, input_tensor.dim())
+    return torch.logsumexp(input_tensor, dim=dim, keepdim=keepdim)
 
 
 def _sum_square(
     input_tensor: torch.Tensor,
     dim: Optional[Union[int, Tuple[int, ...]]] = None,
     keepdim: bool = False,
-) -> torch.Tensor:
-    dim_ = _initialize_none_dim(dim, input_tensor.dim())
-    return torch.sum(torch.square(input_tensor), dim=dim_, keepdim=keepdim)
+):
+    dim = _initialize_none_dim(dim, input_tensor.dim())
+    return torch.sum(torch.square(input_tensor), dim=dim, keepdim=keepdim)
 
 
 _TORCH_FUNCTION_FROM_ONNX_TYPE = {
@@ -89,7 +84,10 @@ _TORCH_FUNCTION_FROM_ONNX_TYPE = {
 }
 
 
-class OnnxReduceSumDynamicAxes(nn.Module, OnnxToTorchModuleWithCustomExport):
+class OnnxReduceSumDynamicAxes(  # pylint: disable=missing-class-docstring
+    nn.Module,
+    OnnxToTorchModuleWithCustomExport,
+):
     def __init__(self, keepdims: int = 1, noop_with_empty_axes: int = 0):
         super().__init__()
 
@@ -97,7 +95,6 @@ class OnnxReduceSumDynamicAxes(nn.Module, OnnxToTorchModuleWithCustomExport):
         self._noop_with_empty_axes = noop_with_empty_axes
 
     def _onnx_attrs(self, opset_version: int) -> Dict[str, Any]:
-        del opset_version
         return {
             'noop_with_empty_axes_i': self._noop_with_empty_axes,
             'keepdims_i': self._keepdims,
@@ -108,7 +105,7 @@ class OnnxReduceSumDynamicAxes(nn.Module, OnnxToTorchModuleWithCustomExport):
         input_tensor: torch.Tensor,
         axes: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        def _forward() -> torch.Tensor:
+        def _forward():
             if axes is None or axes.nelement() == 0:
                 if self._noop_with_empty_axes:
                     return input_tensor
@@ -133,7 +130,7 @@ class OnnxReduceSumDynamicAxes(nn.Module, OnnxToTorchModuleWithCustomExport):
         return _forward()
 
 
-class OnnxReduceSumStaticAxes(nn.Module, OnnxToTorchModule):
+class OnnxReduceSumStaticAxes(nn.Module, OnnxToTorchModule):  # pylint: disable=missing-class-docstring
     def __init__(
         self,
         axes: List[int],
@@ -158,14 +155,14 @@ class OnnxReduceSumStaticAxes(nn.Module, OnnxToTorchModule):
 
             self._axes = list(range(input_tensor.dim()))
 
-        return torch.sum(input_tensor, dim=self._axes, keepdim=bool(self._keepdims))
+        return torch.sum(input_tensor, dim=self._axes, keepdim=self._keepdims)
 
 
-class OnnxReduceStaticAxes(nn.Module, OnnxToTorchModule):
+class OnnxReduceStaticAxes(nn.Module, OnnxToTorchModule):  # pylint: disable=missing-class-docstring
     def __init__(
         self,
         operation_type: str,
-        axes: Optional[List[int]],
+        axes: List[int],
         keepdims: int = 1,
     ):
         super().__init__()
@@ -231,11 +228,10 @@ class OnnxReduceStaticAxes(nn.Module, OnnxToTorchModule):
 @add_converter(operation_type='ReduceSumSquare', version=1)
 @add_converter(operation_type='ReduceSumSquare', version=11)
 @add_converter(operation_type='ReduceSumSquare', version=13)
-def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
-    del graph
+def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:  # pylint: disable=unused-argument
     node_attributes = node.attributes
-    axes: Optional[List[int]] = node_attributes.get('axes', None)
-    keepdims: int = node_attributes.get('keepdims', 1)
+    axes = node_attributes.get('axes', None)
+    keepdims = node_attributes.get('keepdims', 1)
 
     return OperationConverterResult(
         torch_module=OnnxReduceStaticAxes(
@@ -248,13 +244,13 @@ def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
 
 
 @add_converter(operation_type='ReduceSum', version=13)
-def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
-    keepdims: int = node.attributes.get('keepdims', 1)
-    noop_with_empty_axes: int = node.attributes.get('noop_with_empty_axes', 0)
+def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:  # pylint: disable=unused-argument
+    keepdims = node.attributes.get('keepdims', 1)
+    noop_with_empty_axes = node.attributes.get('noop_with_empty_axes', 0)
 
     if len(node.input_values) == 2:
         try:
-            axes = cast(torch.Tensor, get_const_value(node.input_values[1], graph))
+            axes = get_const_value(node.input_values[1], graph)
             axes = axes.tolist()
             return OperationConverterResult(
                 torch_module=OnnxReduceSumStaticAxes(

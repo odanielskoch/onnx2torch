@@ -30,8 +30,11 @@ def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
     weights = weights.to_torch()
     if len(node.input_values) == 3:
         bias_value_name = node.input_values[2]
-        bias = graph.initializers[bias_value_name]
-        bias = bias.to_torch()
+        bias = graph.initializers.get(bias_value_name, None)
+        if bias:
+            bias = bias.to_torch()
+        # bias = graph.initializers[bias_value_name]
+        # bias = bias.to_torch()
     else:
         bias = None
 

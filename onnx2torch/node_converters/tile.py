@@ -1,4 +1,3 @@
-# pylint: disable=missing-docstring
 __all__ = [
     'OnnxTile',
 ]
@@ -15,21 +14,23 @@ from onnx2torch.utils.custom_export_to_onnx import DefaultExportToOnnx
 from onnx2torch.utils.custom_export_to_onnx import OnnxToTorchModuleWithCustomExport
 
 
-class OnnxTile(nn.Module, OnnxToTorchModuleWithCustomExport):
-    def forward(self, input_tensor: torch.Tensor, repeats: torch.Tensor) -> torch.Tensor:
-        def _forward() -> torch.Tensor:
-            return input_tensor.repeat(torch.Size(repeats))
-
+class OnnxTile(nn.Module, OnnxToTorchModuleWithCustomExport):  # pylint: disable=missing-class-docstring
+    def forward(  # pylint: disable=missing-function-docstring
+        self,
+        input_tensor: torch.Tensor,
+        repeats: torch.Tensor,
+    ) -> torch.Tensor:
+        # torch.tile(input_tensor, repeats) is not supported for exporting
+        forward_lambda = lambda: input_tensor.repeat(torch.Size(repeats))
         if torch.onnx.is_in_onnx_export():
-            return DefaultExportToOnnx.export(_forward, 'Tile', input_tensor, repeats, {})
+            return DefaultExportToOnnx.export(forward_lambda, 'Tile', input_tensor, repeats, {})
 
-        return _forward()
+        return forward_lambda()
 
 
 @add_converter(operation_type='Tile', version=6)
 @add_converter(operation_type='Tile', version=13)
-def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
-    del graph
+def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:  # pylint: disable=unused-argument
     return OperationConverterResult(
         torch_module=OnnxTile(),
         onnx_mapping=onnx_mapping_from_node(node=node),

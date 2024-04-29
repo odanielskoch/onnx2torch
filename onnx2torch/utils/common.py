@@ -67,6 +67,9 @@ def get_const_value(  # pylint: disable=missing-function-docstring
             attr_value = attr_value.to_torch()
 
         return attr_value
+    
+    if node.operation_type == "Identity":
+        return graph.initializers[node.input_values[0]].to_torch()
 
     raise KeyError(f'Tensor "{name}" is not found in constant values')
 

@@ -5,6 +5,8 @@ __all__ = [
 
 from typing import List
 from typing import Optional
+from typing import Tuple
+from typing import Union
 
 import torch
 from torch import nn
@@ -18,6 +20,7 @@ from onnx2torch.utils.common import onnx_mapping_from_node
 from onnx2torch.utils.custom_export_to_onnx import DefaultExportToOnnx
 from onnx2torch.utils.custom_export_to_onnx import OnnxToTorchModuleWithCustomExport
 
+#TODO: I think I'm going to add functionality for tuples of tensors, squeezing them then stacking them along axis
 
 class OnnxSqueezeStaticAxes(nn.Module, OnnxToTorchModuleWithCustomExport):  # pylint: disable=missing-class-docstring
     def __init__(self, axes: Optional[List[int]] = None):
@@ -59,7 +62,7 @@ class OnnxSqueezeDynamicAxes(  # pylint: disable=missing-class-docstring
 
     def forward(  # pylint: disable=missing-function-docstring
         self,
-        input_tensor: torch.Tensor,
+        input_tensor: Union[torch.Tensor, Tuple[torch.Tensor]],
         axes: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         def _forward():
@@ -67,6 +70,11 @@ class OnnxSqueezeDynamicAxes(  # pylint: disable=missing-class-docstring
                 return torch.squeeze(input_tensor)
 
             result = input_tensor
+            if isinstance(result, Tuple):
+                if len(result) == 1: 
+                    result = result[0]
+                else: 
+                    raise ValueError("tuples with more than one element not accepted")
             for axes_id in torch.sort(axes, descending=True).values:
                 result = torch.squeeze(result, dim=axes_id)
 

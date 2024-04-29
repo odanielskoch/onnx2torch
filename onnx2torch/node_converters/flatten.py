@@ -15,8 +15,12 @@ class OnnxFlatten(nn.Module, OnnxToTorchModule):  # pylint: disable=missing-docs
         self.axis = axis
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # pylint: disable=missing-function-docstring
-        x = torch.flatten(x, end_dim=self.axis - 1)
-        return torch.flatten(x, start_dim=1)
+        if self.axis == 0:
+            return torch.flatten(x).unsqueeze(0)
+        flat_x = torch.flatten(x, end_dim=self.axis - 1)
+        if len(x.shape) == self.axis: 
+            return flat_x.unsqueeze(dim=-1) # TODO: don't know if I should unsqueeze here
+        return torch.flatten(flat_x, start_dim=1) 
 
     @classmethod
     def maybe_create_simple_flatten(cls, axis: int = 1) -> nn.Module:  # pylint: disable=missing-docstring

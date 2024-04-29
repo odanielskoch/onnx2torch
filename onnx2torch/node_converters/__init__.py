@@ -25,6 +25,7 @@ from onnx2torch.node_converters.instance_norm import *
 from onnx2torch.node_converters.isinf import *
 from onnx2torch.node_converters.isnan import *
 from onnx2torch.node_converters.layer_norm import *
+from onnx2torch.node_converters.if_block import *
 from onnx2torch.node_converters.logical import *
 from onnx2torch.node_converters.lrn import *
 from onnx2torch.node_converters.matmul import *
@@ -35,6 +36,7 @@ from onnx2torch.node_converters.mod import *
 from onnx2torch.node_converters.neg import *
 from onnx2torch.node_converters.nms import *
 from onnx2torch.node_converters.nonzero import *
+
 from onnx2torch.node_converters.pad import *
 from onnx2torch.node_converters.pow import *
 from onnx2torch.node_converters.range import *
@@ -47,11 +49,14 @@ from onnx2torch.node_converters.reshape import *
 from onnx2torch.node_converters.resize import *
 from onnx2torch.node_converters.roialign import *
 from onnx2torch.node_converters.roundings import *
+from onnx2torch.node_converters.scatter_elements import *
 from onnx2torch.node_converters.scatter_nd import *
+from onnx2torch.node_converters.sequence_at import *
 from onnx2torch.node_converters.shape import *
 from onnx2torch.node_converters.slice import *
 from onnx2torch.node_converters.split import *
 from onnx2torch.node_converters.squeeze import *
+from onnx2torch.node_converters.split_to_sequence import *
 from onnx2torch.node_converters.sum import *
 from onnx2torch.node_converters.tile import *
 from onnx2torch.node_converters.topk import *

@@ -2,16 +2,17 @@ import inspect
 from collections import OrderedDict
 from operator import getitem
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional, IO
 
 import torch
-from onnx.onnx_ml_pb2 import ModelProto
+import onnx
+from onnx.onnx_ml_pb2 import ModelProto, GraphProto
 from torch import fx
 from torch import nn
 
 from onnx2torch.node_converters import get_converter
 from onnx2torch.onnx_graph import OnnxGraph
-from onnx2torch.onnx_graph import ValueType
+from onnx2torch.onnx_graph import ValueType, OnnxGraph
 from onnx2torch.utils.safe_shape_inference import safe_shape_inference
 
 
@@ -36,48 +37,15 @@ class InitializersContainer(nn.Module):
         raise RuntimeError('Got unexpected "forward" on constant container')
 
 
-def convert(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-    onnx_model_or_path: Union[str, Path, ModelProto],
+def convert_graph(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    onnx_graph: OnnxGraph,
+    opset_import: Optional[dict[str, int]] = None,
+    version: Optional[int] = None,
     save_input_names: bool = False,
     attach_onnx_mapping: bool = False,
 ) -> fx.GraphModule:
-    """Convert model from onnx to PyTorch.
-
-    This function build torch.fx GraphModule from onnx ModelProto using operations from the converter registry.
-    The registered operation can be found in onnx2torch/node_converters.
-
-    Usage example:
-
-        from onnx2torch import convert
-        torch_module = convert('path/to/onnx_model.onnx')
-
-
-    Parameters
-    ----------
-    onnx_model_or_path : Union[str, Path, ModelProto]
-        Onnx ModelProto or model path to convert.
-    save_input_names : bool
-        Whether to use original onnx inputs names as fx graph placeholders names or to use generated names (input_n).
-        False by default.
-    attach_onnx_mapping : bool
-        Whether to attach info about mapping to original onnx tensors names.
-
-    Returns
-    -------
-    fx.GraphModule
-        PyTorch GraphModule
-
-    """
-
-    onnx_model = safe_shape_inference(onnx_model_or_path)
-
-    if onnx_model.ir_version < 3:
-        raise NotImplementedError('Onnx IR is too old (minimal supported version is 3).')
-
-    onnx_model = _remove_initializers_from_input(onnx_model)
-    opset_import = {opsetid_proto.domain: opsetid_proto.version for opsetid_proto in onnx_model.opset_import}
-
-    onnx_graph = OnnxGraph(onnx_model.graph)  # pylint: disable=no-member
+    
+    assert opset_import != None or version != None, f"must pass opset_import or version"
     torch_graph = fx.Graph()
 
     torch_initializers = InitializersContainer()
@@ -100,7 +68,7 @@ def convert(  # pylint: disable=too-many-locals, too-many-branches, too-many-sta
     # create intermediate nodes
     # IMPORTANT: nodes already topologically sorted
     for name, onnx_node in onnx_graph.nodes.items():
-        version = opset_import[onnx_node.domain]
+        version = opset_import[onnx_node.domain] if opset_import else version
         converter = get_converter(
             domain=onnx_node.domain,
             operation_type=onnx_node.operation_type,
@@ -173,3 +141,69 @@ def convert(  # pylint: disable=too-many-locals, too-many-branches, too-many-sta
     torch_model = fx.GraphModule(root=torch_modules, graph=torch_graph)
 
     return torch_model
+
+
+def onnx_model_and_opset_import( # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        onnx_model_or_path: Optional[Union[str, Path, ModelProto]]=None,
+        f: Optional[IO[bytes]]=None
+) -> tuple[ModelProto, dict[str, int]]:
+
+    if f: 
+        onnx_model_or_path = onnx.load(f)
+    
+    onnx_model = safe_shape_inference(onnx_model_or_path)
+
+    if onnx_model.ir_version < 3:
+        raise NotImplementedError('Onnx IR is too old (minimal supported version is 3).')
+
+    onnx_model = _remove_initializers_from_input(onnx_model)
+    opset_import = {opsetid_proto.domain: opsetid_proto.version for opsetid_proto in onnx_model.opset_import}
+    
+    return onnx_model, opset_import
+
+
+def convert(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    onnx_model_or_path: Union[str, Path, ModelProto],
+    f: Optional[IO[bytes]] = None,
+    save_input_names: bool = False,
+    attach_onnx_mapping: bool = False,
+) -> fx.GraphModule:
+    """Convert model from onnx to PyTorch.
+
+    This function build torch.fx GraphModule from onnx ModelProto using operations from the converter registry.
+    The registered operation can be found in onnx2torch/node_converters.
+
+    Usage example:
+
+        from onnx2torch import convert
+        torch_module = convert('path/to/onnx_model.onnx')
+
+
+    Parameters
+    ----------
+    onnx_model_or_path : Union[str, Path, ModelProto]
+        Onnx ModelProto or model path to convert.
+    save_input_names : bool
+        Whether to use original onnx inputs names as fx graph placeholders names or to use generated names (input_n).
+        False by default.
+    attach_onnx_mapping : bool
+        Whether to attach info about mapping to original onnx tensors names.
+
+    Returns
+    -------
+    fx.GraphModule
+        PyTorch GraphModule
+
+    """
+    model_proto, opset_import = onnx_model_and_opset_import(onnx_model_or_path, f=f)
+
+    onnx_graph = OnnxGraph(model_proto.graph)
+    
+    return convert_graph(
+        onnx_graph=onnx_graph,
+        opset_import=opset_import, 
+        save_input_names=save_input_names,
+        attach_onnx_mapping=attach_onnx_mapping
+    )
+
+

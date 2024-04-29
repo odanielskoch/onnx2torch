@@ -1,8 +1,9 @@
+from __future__ import annotations
 from collections import OrderedDict
 from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
-from typing import Tuple
+from typing import Tuple, Optional
 
 from onnx.onnx_ml_pb2 import GraphProto
 from onnx.onnx_ml_pb2 import NodeProto
@@ -21,7 +22,7 @@ class ValueType(Enum):  # pylint: disable=missing-class-docstring
 
 
 class OnnxGraph:  # pylint: disable=missing-class-docstring
-    def __init__(self, onnx_graph_proto: GraphProto):
+    def __init__(self, onnx_graph_proto: GraphProto, parent_graph: Optional[OnnxGraph]=None):
         self._proto = onnx_graph_proto
         self._input_values = tuple(value_info.name for value_info in self._proto.input)
         self._output_values = tuple(value_info.name for value_info in self._proto.output)
@@ -41,6 +42,15 @@ class OnnxGraph:  # pylint: disable=missing-class-docstring
         self._node_output_values = {
             output_name: (node, i) for node in self._nodes.values() for i, output_name in enumerate(node.output_values)
         }
+        self._node_input_values = {
+            input_name: (node, i) for node in self._nodes.values() for i, input_name in enumerate(node.input_values)
+        }
+        # add inputs from parent graph
+        if parent_graph:
+            maybe_external_input_names = set(self._node_input_values.keys()) - set(self._node_output_values.keys())
+            external_input_names = maybe_external_input_names.intersection(set(parent_graph.node_output_values))
+            self._input_values += tuple(external_input_names)
+        
         self._value_info = {value_info.name: value_info for value_info in onnx_graph_proto.value_info}
         for input_value_info in onnx_graph_proto.input:
             self._value_info[input_value_info.name] = input_value_info
@@ -74,6 +84,14 @@ class OnnxGraph:  # pylint: disable=missing-class-docstring
     @property
     def initializers(self) -> Mapping[str, OnnxTensor]:  # pylint: disable=missing-function-docstring
         return MappingProxyType(self._initializers)
+    
+    @property 
+    def node_input_values(self) -> tuple[str]:
+        return tuple(self._node_input_values.keys())
+    
+    @property
+    def node_output_values(self) -> tuple[str]:
+        return tuple(self._node_output_values.keys())
 
     def value_type(self, value_name: str) -> ValueType:  # pylint: disable=missing-function-docstring
         if value_name in self._input_values:

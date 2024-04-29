@@ -1,4 +1,3 @@
-# pylint: disable=missing-docstring
 __all__ = [
     'OnnxNonMaxSuppression',
 ]
@@ -21,16 +20,15 @@ from onnx2torch.utils.custom_export_to_onnx import DefaultExportToOnnx
 from onnx2torch.utils.custom_export_to_onnx import OnnxToTorchModuleWithCustomExport
 
 
-class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):
+class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):  # pylint: disable=missing-class-docstring
     def __init__(self, center_point_box: int = 0):
         super().__init__()
         self._center_point_box = center_point_box
 
     def _onnx_attrs(self, opset_version: int) -> Dict[str, Any]:
-        del opset_version
         return {'center_point_box_i': self._center_point_box}
 
-    def forward(
+    def forward(  # pylint: disable=missing-function-docstring
         self,
         boxes: torch.Tensor,
         scores: torch.Tensor,
@@ -38,8 +36,7 @@ class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):
         iou_threshold: Optional[torch.Tensor] = None,
         score_threshold: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        def _forward() -> torch.Tensor:
-            return self._nms(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold)
+        forward_lambda = lambda: self._nms(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold)
 
         if torch.onnx.is_in_onnx_export():
             if max_output_boxes_per_class is None:
@@ -51,7 +48,7 @@ class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):
 
             onnx_attrs = self._onnx_attrs(opset_version=get_onnx_version())
             return DefaultExportToOnnx.export(
-                _forward,
+                forward_lambda,
                 'NonMaxSuppression',
                 boxes,
                 scores,
@@ -61,7 +58,7 @@ class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):
                 onnx_attrs,
             )
 
-        return _forward()
+        return forward_lambda()
 
     def _nms(
         self,
@@ -112,8 +109,7 @@ class OnnxNonMaxSuppression(nn.Module, OnnxToTorchModuleWithCustomExport):
 
 @add_converter(operation_type='NonMaxSuppression', version=10)
 @add_converter(operation_type='NonMaxSuppression', version=11)
-def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:
-    del graph
+def _(node: OnnxNode, graph: OnnxGraph) -> OperationConverterResult:  # pylint: disable=unused-argument
     center_point_box = node.attributes.get('center_point_box', 0)
     return OperationConverterResult(
         torch_module=OnnxNonMaxSuppression(center_point_box=center_point_box),
