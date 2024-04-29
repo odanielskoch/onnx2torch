@@ -288,5 +288,3 @@ To cite onnx2torch use `Cite this repository` button, or:
 
 Thanks to Dmitry Chudakov [@cakeofwar42](https://github.com/cakeofwar42) for his contributions.\
 Special thanks to Andrey Denisov [@denisovap2013](https://github.com/denisovap2013) for the logo design.
-
-test commit 123
